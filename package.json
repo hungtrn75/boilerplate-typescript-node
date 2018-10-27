@@ -6,6 +6,8 @@
   "license": "MIT",
   "scripts": {
     "start": "npm run serve",
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "prod": "npm run build && npm run start",
     "build": "npm run build-ts && npm run tslint && npm run copy-static-assets",
     "serve": "node dist/server.js",
     "watch-node": "nodemon dist/server.js",
