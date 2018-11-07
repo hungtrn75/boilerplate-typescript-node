@@ -27,5 +27,6 @@ export class UserRoutes {
         passportConfig.isAuthenticated,
         this.userController.postDeleteAccount
       );
+    app.route("/forgot").post(this.userController.postForgot);
   }
 }

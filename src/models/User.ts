@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import mongoose from "mongoose";
+import _ from "lodash";
 
 export type UserModel = mongoose.Document & {
   email: string;
@@ -55,6 +56,16 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+/**
+ * Hide password to return user
+ */
+userSchema.methods.toJSON = function() {
+  const user = <any>this.toObject();
+  delete user.password;
+  delete user.tokens;
+  return user;
+};
 
 /**
  * Password hash middleware.

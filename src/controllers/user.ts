@@ -136,4 +136,136 @@ export class UserController {
       res.send("Deleted your account!");
     });
   };
+  /**
+   * POST /forgot
+   * Create a random token, then the send user an email with a reset link.
+   */
+  public postForgot = (req: Request, res: Response, next: NextFunction) => {
+    async.waterfall(
+      [
+        function createRandomToken(done: Function) {
+          crypto.randomBytes(16, (err, buf) => {
+            const token = buf.toString("hex");
+            done(err, token);
+          });
+        },
+        function setRandomToken(token: AuthToken, done: Function) {
+          User.findOne({ email: req.body.email }, (err, user: any) => {
+            if (err) {
+              return done(err);
+            }
+            if (!user) {
+              return res.status(404).send({
+                error: "Account with that email address does not exist."
+              });
+            }
+            user.passwordResetToken = token;
+            user.passwordResetExpires = Date.now() + 3600000; // 1 hour
+            user.save((err: WriteError) => {
+              done(err, token, user);
+            });
+          });
+        },
+        function sendForgotPasswordEmail(
+          token: AuthToken,
+          user: UserModel,
+          done: Function
+        ) {
+          const transporter = nodemailer.createTransport({
+            service: "Gmail",
+            auth: {
+              user: process.env.GMAIL_USER,
+              pass: process.env.GMAIL_PASSWORD
+            }
+          });
+          const mailOptions = {
+            to: user.email,
+            from: "hackathon@starter.com",
+            subject: "Reset your password on Hackathon Starter",
+            text: `You are receiving this email because you (or someone else) have requested the reset of the password for your account.\n\n
+          Please click on the following link, or paste this into your browser to complete the process:\n\n
+          http://${req.headers.host}/reset/${token}\n\n
+          If you did not request this, please ignore this email and your password will remain unchanged.\n`
+          };
+          transporter.sendMail(mailOptions, err => {
+            done(err);
+          });
+          res.send({
+            message:
+              "An email has been sent to your email. Please check your email to reset password"
+          });
+        }
+      ],
+      err => {
+        if (err) {
+          return next(err);
+        }
+      }
+    );
+  };
+  /**
+   * POST /reset/:token
+   * Process the reset password request.
+   */
+  public postReset = (req: Request, res: Response, next: NextFunction) => {
+    async.waterfall(
+      [
+        function resetPassword(done: Function) {
+          User.findOne({ passwordResetToken: req.params.token })
+            .where("passwordResetExpires")
+            .gt(Date.now())
+            .exec((err, user: any) => {
+              if (err) {
+                return next(err);
+              }
+              if (!user) {
+                return res
+                  .status(404)
+                  .send({
+                    error: "Password reset token is invalid or has expired."
+                  });
+              }
+              user.password = req.body.password;
+              user.passwordResetToken = undefined;
+              user.passwordResetExpires = undefined;
+              user.save((err: WriteError) => {
+                if (err) {
+                  return next(err);
+                }
+                req.logIn(user, err => {
+                  done(err, user);
+                });
+              });
+            });
+        },
+        function sendResetPasswordEmail(user: UserModel, done: Function) {
+          const transporter = nodemailer.createTransport({
+            service: "SendGrid",
+            auth: {
+              user: process.env.SENDGRID_USER,
+              pass: process.env.SENDGRID_PASSWORD
+            }
+          });
+          const mailOptions = {
+            to: user.email,
+            from: "express-ts@starter.com",
+            subject: "Your password has been changed",
+            text: `Hello,\n\nThis is a confirmation that the password for your account ${
+              user.email
+            } has just been changed.\n`
+          };
+          transporter.sendMail(mailOptions, err => {
+            res.send({ message: "Success! Your password has been changed." });
+            done(err);
+          });
+        }
+      ],
+      err => {
+        if (err) {
+          return next(err);
+        }
+        res.redirect("/");
+      }
+    );
+  };
 }
